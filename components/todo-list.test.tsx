@@ -393,3 +393,179 @@ describe("Todo 카테고리별 필터", () => {
     expect(screen.getAllByRole("listitem")).toHaveLength(3);
   });
 });
+
+// localStorage에 저장된 상태로 시작하는 헬퍼(새로고침 후 상태를 흉내낸다)
+function seedStorage(todos: Record<string, unknown>[]) {
+  localStorage.setItem("todos", JSON.stringify(todos));
+}
+
+function storedTodo(overrides: Record<string, unknown>) {
+  return {
+    completed: false,
+    priority: "medium",
+    createdAt: 0,
+    ...overrides,
+  };
+}
+
+describe("Todo 편집", () => {
+  it("더블클릭해 편집하고 Enter → 목록에 반영된다", async () => {
+    const user = userEvent.setup();
+    render(<TodoList />);
+    await addTodo(user, "장보기");
+
+    await user.dblClick(await screen.findByText("장보기"));
+    const input = screen.getByRole("textbox", { name: "할 일 편집" });
+    await user.clear(input);
+    await user.type(input, "  마트 장보기  {Enter}");
+
+    expect(screen.getByText("마트 장보기")).toBeInTheDocument();
+    expect(screen.queryByText("장보기")).not.toBeInTheDocument();
+    expect(screen.getAllByRole("listitem")).toHaveLength(1);
+  });
+
+  it("빈 값으로 편집을 확정하면 항목이 삭제된다", async () => {
+    const user = userEvent.setup();
+    render(<TodoList />);
+    await addTodo(user, "장보기");
+    await addTodo(user, "청소");
+
+    await user.dblClick(await screen.findByText("장보기"));
+    await user.clear(screen.getByRole("textbox", { name: "할 일 편집" }));
+    await user.keyboard("{Enter}");
+
+    expect(screen.queryByText("장보기")).not.toBeInTheDocument();
+    expect(screen.getAllByRole("listitem")).toHaveLength(1);
+    expect(screen.getByText("청소")).toBeInTheDocument();
+  });
+
+  it("편집한 내용은 새로고침(재마운트) 후에도 유지된다", async () => {
+    const user = userEvent.setup();
+    const { unmount } = render(<TodoList />);
+    await addTodo(user, "장보기");
+
+    await user.dblClick(await screen.findByText("장보기"));
+    const input = screen.getByRole("textbox", { name: "할 일 편집" });
+    await user.clear(input);
+    await user.type(input, "마트 장보기{Enter}");
+    await screen.findByText("마트 장보기");
+    unmount();
+
+    render(<TodoList />);
+
+    expect(await screen.findByText("마트 장보기")).toBeInTheDocument();
+    expect(screen.queryByText("장보기")).not.toBeInTheDocument();
+  });
+});
+
+describe("Todo 필터 조합", () => {
+  it("상태 필터와 카테고리 필터를 동시에 적용한다", async () => {
+    seedStorage([
+      storedTodo({ id: "1", text: "업무-진행", category: "work" }),
+      storedTodo({ id: "2", text: "업무-완료", category: "work", completed: true }),
+      storedTodo({ id: "3", text: "개인-진행", category: "personal" }),
+      storedTodo({ id: "4", text: "태그없음-진행" }),
+    ]);
+    const user = userEvent.setup();
+    render(<TodoList />);
+    await screen.findByText("업무-진행");
+
+    await user.click(screen.getByRole("radio", { name: "진행중" }));
+    const filterGroup = screen.getByRole("radiogroup", { name: "카테고리 필터" });
+    await user.click(within(filterGroup).getByRole("radio", { name: "업무" }));
+
+    const items = screen.getAllByRole("listitem");
+    expect(items).toHaveLength(1);
+    expect(items[0]).toHaveTextContent("업무-진행");
+  });
+
+  it("상태·카테고리 필터, 검색, 정렬을 동시에 적용한다", async () => {
+    seedStorage([
+      storedTodo({ id: "1", text: "회의 다", category: "work", dueDate: "2026-07-03" }),
+      storedTodo({ id: "2", text: "회의 가", category: "work" }),
+      storedTodo({ id: "3", text: "회의 나", category: "work", dueDate: "2026-07-01" }),
+      storedTodo({ id: "4", text: "회의 완료", category: "work", completed: true }),
+      storedTodo({ id: "5", text: "회의 개인", category: "personal" }),
+      storedTodo({ id: "6", text: "보고서", category: "work" }),
+    ]);
+    const user = userEvent.setup();
+    render(<TodoList />);
+    await screen.findByText("보고서");
+
+    await user.click(screen.getByRole("radio", { name: "진행중" }));
+    const filterGroup = screen.getByRole("radiogroup", { name: "카테고리 필터" });
+    await user.click(within(filterGroup).getByRole("radio", { name: "업무" }));
+    await user.type(screen.getByRole("searchbox", { name: "검색" }), "회의");
+
+    await user.click(screen.getByRole("radio", { name: "마감일순" }));
+    let items = screen.getAllByRole("listitem");
+    expect(items).toHaveLength(3);
+    expect(items[0]).toHaveTextContent("회의 나"); // 07-01
+    expect(items[1]).toHaveTextContent("회의 다"); // 07-03
+    expect(items[2]).toHaveTextContent("회의 가"); // 마감일 없음
+
+    await user.click(screen.getByRole("radio", { name: "이름순" }));
+    items = screen.getAllByRole("listitem");
+    expect(items.map((item) => item.textContent)).toEqual([
+      expect.stringContaining("회의 가"),
+      expect.stringContaining("회의 나"),
+      expect.stringContaining("회의 다"),
+    ]);
+  });
+
+  it.each([
+    ["개인", "운동"],
+    ["쇼핑", "우유 사기"],
+  ])("'%s' 카테고리 필터 → 해당 태그 항목만 표시된다", async (label, text) => {
+    seedStorage([
+      storedTodo({ id: "1", text: "보고서", category: "work" }),
+      storedTodo({ id: "2", text: "운동", category: "personal" }),
+      storedTodo({ id: "3", text: "우유 사기", category: "shopping" }),
+      storedTodo({ id: "4", text: "태그없음" }),
+    ]);
+    const user = userEvent.setup();
+    render(<TodoList />);
+    await screen.findByText("보고서");
+
+    const filterGroup = screen.getByRole("radiogroup", { name: "카테고리 필터" });
+    await user.click(within(filterGroup).getByRole("radio", { name: label }));
+
+    const items = screen.getAllByRole("listitem");
+    expect(items).toHaveLength(1);
+    expect(items[0]).toHaveTextContent(text);
+  });
+});
+
+describe("Todo 기존 데이터·기타 표시", () => {
+  it("priority가 없는 기존 저장 데이터는 '보통' 뱃지로 표시된다", async () => {
+    seedStorage([{ id: "1", text: "구버전 할 일", completed: false }]);
+    render(<TodoList />);
+
+    const item = await screen.findByRole("listitem");
+    expect(item).toHaveTextContent("구버전 할 일");
+    expect(item).toHaveTextContent("보통");
+  });
+
+  it("검색 결과가 없으면 빈 목록 메시지를 표시한다", async () => {
+    const user = userEvent.setup();
+    render(<TodoList />);
+    await addTodo(user, "장보기");
+    await screen.findByText("장보기");
+
+    await user.type(screen.getByRole("searchbox", { name: "검색" }), "회의");
+
+    expect(screen.queryByRole("listitem")).not.toBeInTheDocument();
+    expect(screen.getByText(/할 일이 없습니다/)).toBeInTheDocument();
+  });
+
+  it("마감일을 입력해 추가하면 목록에 마감일이 표시된다", async () => {
+    const user = userEvent.setup();
+    render(<TodoList />);
+
+    await addTodoWithDue(user, "회의", "2026-07-01");
+
+    const item = await screen.findByRole("listitem");
+    expect(item).toHaveTextContent("회의");
+    expect(item).toHaveTextContent("2026-07-01");
+  });
+});
