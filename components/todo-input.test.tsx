@@ -228,3 +228,45 @@ describe("TodoInput 빈 입력 제출", () => {
     ).toHaveAttribute("aria-checked", "true");
   });
 });
+
+describe("TodoInput 제출", () => {
+  it("추가 버튼을 클릭해도 제출된다", async () => {
+    const user = userEvent.setup();
+    const onAdd = vi.fn();
+    render(<TodoInput onAdd={onAdd} />);
+
+    await user.type(screen.getByRole("textbox", { name: "새 할 일" }), "장보기");
+    await user.click(screen.getByRole("button", { name: "추가" }));
+
+    expect(onAdd).toHaveBeenCalledExactlyOnceWith(
+      "장보기",
+      "medium",
+      undefined,
+      undefined
+    );
+  });
+
+  it("앞뒤 공백이 있는 입력도 제출된다(trim은 useTodos.addTodo가 담당)", async () => {
+    const user = userEvent.setup();
+    const onAdd = vi.fn();
+    render(<TodoInput onAdd={onAdd} />);
+
+    await user.type(
+      screen.getByRole("textbox", { name: "새 할 일" }),
+      "  장보기  {Enter}"
+    );
+
+    expect(onAdd).toHaveBeenCalledTimes(1);
+    expect(onAdd.mock.calls[0][0].trim()).toBe("장보기");
+  });
+
+  it("제출 후 입력창이 비워진다", async () => {
+    const user = userEvent.setup();
+    render(<TodoInput onAdd={vi.fn()} />);
+
+    const input = screen.getByRole("textbox", { name: "새 할 일" });
+    await user.type(input, "장보기{Enter}");
+
+    expect(input).toHaveValue("");
+  });
+});
