@@ -95,3 +95,54 @@ describe("matchesSearch", () => {
     expect(matchesSearch(makeTodo({ text: "장보기" }), "")).toBe(true);
   });
 });
+
+describe("sortTodos 경계 사례", () => {
+  it("'due'에서 마감일이 같은 항목끼리는 원래 순서를 유지한다", () => {
+    const todos = [
+      makeTodo({ id: "a", dueDate: "2026-07-05" }),
+      makeTodo({ id: "b", dueDate: "2026-07-01" }),
+      makeTodo({ id: "c", dueDate: "2026-07-05" }),
+      makeTodo({ id: "d", dueDate: "2026-07-05" }),
+    ];
+
+    expect(sortTodos(todos, "due").map((t) => t.id)).toEqual([
+      "b",
+      "a",
+      "c",
+      "d",
+    ]);
+  });
+
+  it.each(["created", "name", "due"] as const)(
+    "빈 배열을 '%s'로 정렬하면 빈 배열을 반환한다",
+    (sortBy) => {
+      expect(sortTodos([], sortBy)).toEqual([]);
+    }
+  );
+
+  it("'name'은 한글·영문이 섞이면 한글 가나다순 → 영문 알파벳순으로 정렬한다", () => {
+    const todos = [
+      makeTodo({ id: "a", text: "사과" }),
+      makeTodo({ id: "b", text: "banana" }),
+      makeTodo({ id: "c", text: "가지" }),
+      makeTodo({ id: "d", text: "Apple" }),
+    ];
+
+    // ko 로케일은 한글을 영문보다 앞에 두고, 영문은 대소문자와 무관하게 알파벳순
+    expect(sortTodos(todos, "name").map((t) => t.id)).toEqual([
+      "c",
+      "a",
+      "d",
+      "b",
+    ]);
+  });
+});
+
+describe("matchesSearch 공백 처리", () => {
+  it("검색어 앞뒤 공백을 제거하고 비교한다", () => {
+    expect(matchesSearch(makeTodo({ text: "팀 회의 준비" }), "  회의  ")).toBe(
+      true
+    );
+    expect(matchesSearch(makeTodo({ text: "장보기" }), "  회의  ")).toBe(false);
+  });
+});
