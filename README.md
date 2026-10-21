@@ -7,6 +7,16 @@
 - 강의 본문: https://docs.claude-hunt.com
 - 수강생 결과물 공유: https://claude-hunt.com
 
+## 주요 기능
+
+- 할 일 추가 · 완료 표시 · 삭제
+- 더블클릭으로 텍스트 편집 (Enter 확정, Esc 취소, 빈 값으로 확정하면 삭제)
+- 우선순위(높음 · 보통 · 낮음), 카테고리(업무 · 개인 · 쇼핑), 마감일 지정
+- 상태 필터(전체 · 진행중 · 완료), 카테고리 필터, 텍스트 검색
+- 정렬(생성일순 · 이름순 · 마감일순)
+- `d` 키로 다크 모드 전환
+- 데이터는 브라우저 `localStorage`(`todos` 키)에 저장되며 별도 서버나 DB가 없습니다
+
 ## 기술 스택
 
 - Next.js 16 (App Router, Turbopack)
@@ -18,7 +28,11 @@
 
 ## 시작하기
 
+사전 준비: [bun](https://bun.sh) 이 설치되어 있어야 합니다.
+
 ```bash
+git clone https://github.com/iori2395/todo-tutorial.git
+cd todo-tutorial
 bun install
 bun dev
 ```
@@ -28,13 +42,17 @@ bun dev
 자주 쓰는 스크립트:
 
 ```bash
-bun dev            # 개발 서버 실행
-bun run build      # 프로덕션 빌드
-bun run start      # 빌드 결과 실행
-bun run lint       # ESLint
-bun run typecheck  # tsc --noEmit
-bun run format     # Prettier 포맷팅
+bun dev             # 개발 서버 실행
+bun run build       # 프로덕션 빌드
+bun run start       # 빌드 결과 실행
+bun run test        # 테스트 1회 실행 (Vitest)
+bun run test:watch  # 테스트 감시 모드
+bun run lint        # ESLint
+bun run typecheck   # tsc --noEmit
+bun run format      # Prettier 포맷팅
 ```
+
+> 테스트는 `bun test` 가 아니라 `bun run test` 로 실행합니다. `bun test` 는 bun 내장 테스트 러너를 실행하므로 Vitest 설정(jsdom 등)이 적용되지 않습니다.
 
 ## 챕터별 시작 브랜치
 
